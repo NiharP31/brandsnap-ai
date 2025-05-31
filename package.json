@@ -1,0 +1,32 @@
+{
+  "name": "brandsnap.ai",
+  "version": "1.0.0",
+  "description": "AI-Powered Brand Generator for Startups",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "deploy": "node deploy.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NiharP31/brandsnap-ai.git"
+  },
+  "keywords": [
+    "ai",
+    "branding",
+    "startup",
+    "generator",
+    "openai"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/NiharP31/brandsnap-ai/issues"
+  },
+  "homepage": "https://github.com/NiharP31/brandsnap-ai#readme",
+  "dependencies": {
+    "freestyle-sandboxes": "^0.0.75"
+  }
+}
