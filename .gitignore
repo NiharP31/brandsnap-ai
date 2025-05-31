@@ -47,3 +47,6 @@ Thumbs.db
 # Sample/test output files
 *_brand_package.json
 *_output.json
+
+# Internal documents
+PITCH.md
