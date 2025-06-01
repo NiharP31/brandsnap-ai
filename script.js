@@ -1,18 +1,22 @@
 // AI-Powered Brand generation with OpenAI integration
 class BrandGenerator {
     constructor() {
-        // Fallback data for when API is unavailable
+        // Logo icons for fallback
+        this.logoIcons = [
+            'fas fa-rocket', 'fas fa-bolt', 'fas fa-star', 'fas fa-gem',
+            'fas fa-crown', 'fas fa-fire', 'fas fa-heart', 'fas fa-leaf',
+            'fas fa-shield-alt', 'fas fa-trophy', 'fas fa-lightbulb'
+        ];
+
+        // Brand name components
         this.brandPrefixes = [
-            'Spark', 'Nova', 'Zen', 'Flux', 'Echo', 'Pulse', 'Vibe', 'Flow', 'Sync', 'Leap',
-            'Swift', 'Bright', 'Smart', 'Quick', 'Pure', 'Bold', 'Fresh', 'Clear', 'Sharp', 'Wise',
-            'True', 'Prime', 'Core', 'Edge', 'Peak', 'Max', 'Pro', 'Ultra', 'Meta', 'Hyper',
-            'Micro', 'Nano', 'Mega', 'Super', 'Turbo', 'Rapid', 'Instant', 'Direct', 'Simple', 'Easy'
+            'pro', 'tech', 'smart', 'quick', 'neo', 'meta', 'ultra', 'super',
+            'max', 'prime', 'elite', 'apex', 'nova', 'core', 'edge', 'flux'
         ];
 
         this.brandSuffixes = [
-            'ly', 'fy', 'io', 'co', 'ai', 'lab', 'hub', 'box', 'kit', 'app',
-            'tech', 'soft', 'ware', 'sys', 'net', 'web', 'link', 'sync', 'flow', 'wave',
-            'space', 'cloud', 'data', 'mind', 'core', 'base', 'zone', 'spot', 'dock', 'port'
+            'ly', 'fy', 'hub', 'lab', 'tech', 'soft', 'works', 'solutions',
+            'sys', 'corp', 'inc', 'pro', 'max', 'ai', 'io', 'app'
         ];
 
         this.colorPalettes = [
@@ -50,14 +54,6 @@ class BrandGenerator {
             }
         ];
 
-        this.logoIcons = [
-            'fas fa-rocket', 'fas fa-lightbulb', 'fas fa-star', 'fas fa-bolt', 'fas fa-gem',
-            'fas fa-crown', 'fas fa-fire', 'fas fa-leaf', 'fas fa-heart', 'fas fa-shield-alt',
-            'fas fa-cog', 'fas fa-cube', 'fas fa-diamond', 'fas fa-feather', 'fas fa-globe',
-            'fas fa-magic', 'fas fa-mountain', 'fas fa-paper-plane', 'fas fa-puzzle-piece',
-            'fas fa-seedling', 'fas fa-sun', 'fas fa-tree', 'fas fa-trophy', 'fas fa-umbrella'
-        ];
-
         this.currentBrand = null;
         this.openaiApiKey = null;
         this.useAI = false;
@@ -87,104 +83,95 @@ class BrandGenerator {
         return stored;
     }
 
-    // Generate brand using OpenAI GPT
+    // AI-powered brand generation
     async generateBrandWithAI(idea) {
         if (!this.openaiApiKey) {
             throw new Error('OpenAI API key not set');
         }
 
-        const prompt = `You are a professional brand strategist and creative director. Generate a complete brand identity for the following startup idea:
+        const prompt = `You are a professional brand strategist and creative director. Generate a complete brand identity for this startup idea: "${idea}"
 
-"${idea}"
-
-Please respond with a JSON object containing exactly these fields:
+Return ONLY a valid JSON object with this exact structure:
 {
-  "brandName": "A creative, memorable brand name (1-2 words, brandable)",
-  "tagline": "A compelling tagline (5-8 words, captures essence)",
-  "industry": "Primary industry category",
-  "vibe": "Brand personality (modern/classic/playful/professional/etc)",
-  "reasoning": "Brief explanation of naming choice"
+  "brandName": "creative, memorable brand name (2-3 words max)",
+  "tagline": "compelling tagline that captures the essence (8-12 words)",
+  "industry": "primary industry category (tech, health, finance, food, education, travel, social, business, entertainment, retail)",
+  "vibe": "brand personality (modern, playful, professional, creative, classic, innovative)",
+  "reasoning": "brief explanation for the brand name choice (1-2 sentences)",
+  "logoDescription": "detailed description for logo image generation (specific visual elements, style, colors, symbols)"
 }
 
-Requirements:
-- Brand name should be unique, memorable, and easy to pronounce
-- Avoid generic names or existing company names
-- Tagline should be inspiring and capture the value proposition
-- Consider the target audience and market positioning
-- Make it brandable and scalable
+Important guidelines:
+- Brand name should be unique, brandable, and easy to pronounce
+- Tagline should be action-oriented and market-focused
+- Industry should be one of the listed categories
+- Vibe should match the target audience and market positioning
+- Logo description should be specific enough for AI image generation (include style, elements, colors)
+- Ensure all fields are properly filled and valid`;
 
-Respond only with valid JSON, no additional text.`;
-
-        try {
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${this.openaiApiKey}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: "gpt-3.5-turbo",
-                    messages: [{
-                        role: "user",
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${this.openaiApiKey}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-3.5-turbo',
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are a professional brand strategist. Return only valid JSON responses.'
+                    },
+                    {
+                        role: 'user',
                         content: prompt
-                    }],
-                    temperature: 0.8,
-                    max_tokens: 300
-                })
-            });
+                    }
+                ],
+                max_tokens: 500,
+                temperature: 0.8
+            })
+        });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`OpenAI API Error: ${errorData.error?.message || 'Unknown error'}`);
-            }
-
-            const data = await response.json();
-            const content = data.choices[0].message.content.trim();
-            
-            // Parse the JSON response
-            let aiResult;
-            try {
-                aiResult = JSON.parse(content);
-            } catch (parseError) {
-                // If JSON parsing fails, extract data manually
-                aiResult = this.parseAIResponse(content);
-            }
-
-            return {
-                brandName: aiResult.brandName || 'BrandName',
-                tagline: aiResult.tagline || 'Your tagline here',
-                industry: aiResult.industry || 'business',
-                vibe: aiResult.vibe || 'modern',
-                reasoning: aiResult.reasoning || 'AI-generated brand identity'
-            };
-
-        } catch (error) {
-            console.error('OpenAI API Error:', error);
-            throw error;
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || 'OpenAI API request failed');
         }
+
+        const data = await response.json();
+        const content = data.choices[0].message.content;
+        
+        return this.parseAIResponse(content);
     }
 
-    // Parse AI response if JSON parsing fails
     parseAIResponse(content) {
-        const result = {};
-        
-        // Extract brand name
-        const nameMatch = content.match(/"brandName":\s*"([^"]+)"/i);
-        result.brandName = nameMatch ? nameMatch[1] : null;
-        
-        // Extract tagline
-        const taglineMatch = content.match(/"tagline":\s*"([^"]+)"/i);
-        result.tagline = taglineMatch ? taglineMatch[1] : null;
-        
-        // Extract industry
-        const industryMatch = content.match(/"industry":\s*"([^"]+)"/i);
-        result.industry = industryMatch ? industryMatch[1] : null;
-        
-        // Extract vibe
-        const vibeMatch = content.match(/"vibe":\s*"([^"]+)"/i);
-        result.vibe = vibeMatch ? vibeMatch[1] : null;
-        
-        return result;
+        try {
+            // Clean the content to extract JSON
+            const jsonMatch = content.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) {
+                throw new Error('No JSON found in AI response');
+            }
+            
+            const jsonStr = jsonMatch[0];
+            const parsed = JSON.parse(jsonStr);
+            
+            // Validate required fields
+            if (!parsed.brandName || !parsed.tagline || !parsed.industry || !parsed.vibe) {
+                throw new Error('Missing required fields in AI response');
+            }
+            
+            // Set defaults for optional fields
+            return {
+                brandName: parsed.brandName,
+                tagline: parsed.tagline,
+                industry: parsed.industry || 'business',
+                vibe: parsed.vibe || 'modern',
+                reasoning: parsed.reasoning || 'AI-generated brand identity',
+                logoDescription: parsed.logoDescription || null
+            };
+        } catch (error) {
+            console.error('Failed to parse AI response:', error);
+            throw new Error('Invalid AI response format');
+        }
     }
 
     // Generate color palette based on industry and vibe
@@ -237,8 +224,68 @@ Respond only with valid JSON, no additional text.`;
         return this.colorPalettes.find(p => p.name === chosenPaletteName) || this.colorPalettes[0];
     }
 
-    // Generate logo based on industry
-    generateSmartLogo(brandName, industry, vibe) {
+    // Generate logo image using DALL-E
+    async generateLogoImage(logoDescription, brandName, retryCount = 0) {
+        if (!this.openaiApiKey) {
+            throw new Error('OpenAI API key not set');
+        }
+
+        const maxRetries = 2;
+        
+        // Enhanced prompt for better logo generation
+        const enhancedPrompt = `Professional minimalist logo design for "${brandName}": ${logoDescription}. 
+Style: Clean, modern, scalable vector-style logo on transparent or white background. 
+High contrast, suitable for business use, memorable and distinctive. 
+Avoid text/typography, focus on symbolic elements and shapes.`;
+
+        try {
+            const response = await fetch('https://api.openai.com/v1/images/generations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.openaiApiKey}`
+                },
+                body: JSON.stringify({
+                    model: 'dall-e-3',
+                    prompt: enhancedPrompt,
+                    size: '1024x1024',
+                    quality: 'standard',
+                    n: 1
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                
+                // Handle specific DALL-E errors
+                if (errorData.error?.code === 'content_policy_violation') {
+                    // Fallback to generic description
+                    if (retryCount < maxRetries) {
+                        const genericPrompt = `Minimalist professional logo design: simple geometric shapes, clean lines, modern style, suitable for ${brandName} brand. Vector-style, high contrast, white background.`;
+                        return this.generateLogoImage(genericPrompt, brandName, retryCount + 1);
+                    }
+                }
+                
+                throw new Error(errorData.error?.message || 'DALL-E API request failed');
+            }
+
+            const data = await response.json();
+            return data.data[0].url; // Return the generated image URL
+            
+        } catch (error) {
+            // Fallback for API errors
+            if (retryCount < maxRetries) {
+                const fallbackPrompt = `Simple professional logo: abstract symbol, clean design, modern style for business brand`;
+                return this.generateLogoImage(fallbackPrompt, brandName, retryCount + 1);
+            }
+            
+            console.warn('Logo image generation failed:', error.message);
+            return null; // Return null to fall back to icon-based logo
+        }
+    }
+
+    // Generate logo (enhanced with AI image generation)
+    async generateSmartLogo(brandName, industry, vibe, logoDescription = null, useAI = false) {
         const industryIcons = {
             'tech': ['fas fa-rocket', 'fas fa-bolt', 'fas fa-cog', 'fas fa-cube'],
             'technology': ['fas fa-rocket', 'fas fa-bolt', 'fas fa-cog', 'fas fa-cube'],
@@ -288,15 +335,32 @@ Respond only with valid JSON, no additional text.`;
             ]
         };
 
-        // Choose icon based on industry
+        // Try AI logo generation first if enabled and description available
+        if (useAI && logoDescription && this.openaiApiKey) {
+            try {
+                const logoImageUrl = await this.generateLogoImage(logoDescription, brandName);
+                if (logoImageUrl) {
+                    return {
+                        type: 'image',
+                        imageUrl: logoImageUrl,
+                        text: brandName,
+                        description: logoDescription
+                    };
+                }
+            } catch (error) {
+                console.warn('AI logo generation failed, falling back to icon-based logo:', error.message);
+            }
+        }
+
+        // Fallback to icon-based logo
         let iconOptions = industryIcons[industry?.toLowerCase()] || this.logoIcons;
         const icon = iconOptions[Math.floor(Math.random() * iconOptions.length)];
 
-        // Choose gradient based on vibe
         let gradientOptions = vibeGradients[vibe?.toLowerCase()] || vibeGradients.modern;
         const gradient = gradientOptions[Math.floor(Math.random() * gradientOptions.length)];
 
         return {
+            type: 'icon',
             icon: icon,
             gradient: gradient,
             text: brandName
@@ -368,13 +432,22 @@ Respond only with valid JSON, no additional text.`;
                 tagline: this.generateTaglineFallback(idea),
                 industry: 'business',
                 vibe: 'modern',
-                reasoning: 'Generated using algorithmic approach'
+                reasoning: 'Generated using algorithmic approach',
+                logoDescription: null
             };
         }
 
-        // Generate color palette and logo based on AI insights or fallback
+        // Generate color palette
         const colorPalette = this.generateSmartColorPalette(brandData.industry, brandData.vibe);
-        const logo = this.generateSmartLogo(brandData.brandName, brandData.industry, brandData.vibe);
+        
+        // Generate logo with AI if available
+        const logo = await this.generateSmartLogo(
+            brandData.brandName, 
+            brandData.industry, 
+            brandData.vibe, 
+            brandData.logoDescription,
+            generatedWithAI
+        );
 
         this.currentBrand = {
             idea: idea,
@@ -404,19 +477,36 @@ Respond only with valid JSON, no additional text.`;
                         this.currentBrand.brandName = aiResult.brandName;
                         this.currentBrand.reasoning = aiResult.reasoning;
                         this.currentBrand.generatedWithAI = true;
+                        // Regenerate logo with new brand name
+                        this.currentBrand.logo = await this.generateSmartLogo(
+                            this.currentBrand.brandName, 
+                            this.currentBrand.industry, 
+                            this.currentBrand.vibe,
+                            aiResult.logoDescription,
+                            true
+                        );
                     } catch (error) {
                         this.currentBrand.brandName = this.generateBrandNameFallback(idea);
                         this.currentBrand.generatedWithAI = false;
+                        this.currentBrand.logo = await this.generateSmartLogo(
+                            this.currentBrand.brandName, 
+                            this.currentBrand.industry, 
+                            this.currentBrand.vibe,
+                            null,
+                            false
+                        );
                     }
                 } else {
                     this.currentBrand.brandName = this.generateBrandNameFallback(idea);
                     this.currentBrand.generatedWithAI = false;
+                    this.currentBrand.logo = await this.generateSmartLogo(
+                        this.currentBrand.brandName, 
+                        this.currentBrand.industry, 
+                        this.currentBrand.vibe,
+                        null,
+                        false
+                    );
                 }
-                this.currentBrand.logo = this.generateSmartLogo(
-                    this.currentBrand.brandName, 
-                    this.currentBrand.industry, 
-                    this.currentBrand.vibe
-                );
                 break;
             case 'tagline':
                 if (this.useAI && this.openaiApiKey) {
@@ -440,11 +530,37 @@ Respond only with valid JSON, no additional text.`;
                 );
                 break;
             case 'logo':
-                this.currentBrand.logo = this.generateSmartLogo(
-                    this.currentBrand.brandName, 
-                    this.currentBrand.industry, 
-                    this.currentBrand.vibe
-                );
+                if (this.useAI && this.openaiApiKey) {
+                    try {
+                        const aiResult = await this.generateBrandWithAI(idea);
+                        this.currentBrand.logo = await this.generateSmartLogo(
+                            this.currentBrand.brandName, 
+                            this.currentBrand.industry, 
+                            this.currentBrand.vibe,
+                            aiResult.logoDescription,
+                            true
+                        );
+                        this.currentBrand.generatedWithAI = true;
+                    } catch (error) {
+                        this.currentBrand.logo = await this.generateSmartLogo(
+                            this.currentBrand.brandName, 
+                            this.currentBrand.industry, 
+                            this.currentBrand.vibe,
+                            null,
+                            false
+                        );
+                        this.currentBrand.generatedWithAI = false;
+                    }
+                } else {
+                    this.currentBrand.logo = await this.generateSmartLogo(
+                        this.currentBrand.brandName, 
+                        this.currentBrand.industry, 
+                        this.currentBrand.vibe,
+                        null,
+                        false
+                    );
+                    this.currentBrand.generatedWithAI = false;
+                }
                 break;
         }
 
@@ -810,12 +926,7 @@ class BrandSnapApp {
         document.getElementById('tagline').textContent = brand.tagline;
 
         // Update logo
-        const logoElement = document.getElementById('logoPlaceholder');
-        logoElement.innerHTML = `
-            <i class="${brand.logo.icon}"></i>
-            <span>${brand.logo.text}</span>
-        `;
-        logoElement.style.background = brand.logo.gradient;
+        this.displayLogo(brand.logo);
 
         // Update color palette
         this.displayColorPalette(brand.colorPalette);
@@ -826,6 +937,33 @@ class BrandSnapApp {
         // Show results section
         const resultsSection = document.getElementById('results');
         resultsSection.classList.remove('hidden');
+    }
+
+    displayLogo(logo) {
+        const logoElement = document.getElementById('logoPlaceholder');
+        
+        if (logo.type === 'image' && logo.imageUrl) {
+            // Display AI-generated image logo
+            logoElement.innerHTML = `
+                <div class="logo-image-container">
+                    <img src="${logo.imageUrl}" alt="${logo.text} logo" class="logo-image" />
+                    <div class="logo-ai-badge">
+                        <i class="fas fa-robot"></i> AI Generated
+                    </div>
+                </div>
+                <span class="logo-text">${logo.text}</span>
+            `;
+            logoElement.style.background = 'linear-gradient(135deg, #f8f9fa, #e9ecef)';
+            logoElement.classList.add('image-logo');
+        } else {
+            // Display icon-based logo (fallback)
+            logoElement.innerHTML = `
+                <i class="${logo.icon}"></i>
+                <span>${logo.text}</span>
+            `;
+            logoElement.style.background = logo.gradient;
+            logoElement.classList.remove('image-logo');
+        }
     }
 
     showAIIndicator(generatedWithAI) {
@@ -862,12 +1000,7 @@ class BrandSnapApp {
             case 'name':
                 document.getElementById('brandName').textContent = brand.brandName;
                 // Also update logo text
-                const logoElement = document.getElementById('logoPlaceholder');
-                logoElement.innerHTML = `
-                    <i class="${brand.logo.icon}"></i>
-                    <span>${brand.logo.text}</span>
-                `;
-                logoElement.style.background = brand.logo.gradient;
+                this.displayLogo(brand.logo);
                 break;
             case 'tagline':
                 document.getElementById('tagline').textContent = brand.tagline;
@@ -876,12 +1009,7 @@ class BrandSnapApp {
                 this.displayColorPalette(brand.colorPalette);
                 break;
             case 'logo':
-                const logo = document.getElementById('logoPlaceholder');
-                logo.innerHTML = `
-                    <i class="${brand.logo.icon}"></i>
-                    <span>${brand.logo.text}</span>
-                `;
-                logo.style.background = brand.logo.gradient;
+                this.displayLogo(brand.logo);
                 break;
         }
         
@@ -904,17 +1032,36 @@ class BrandSnapApp {
     showComponentLoading(type, show) {
         const button = document.querySelector(`[data-type="${type}"]`);
         if (show) {
-            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+            if (type === 'logo' && this.generator.useAI) {
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating AI Logo...';
+                // Add loading shimmer to logo placeholder
+                const logoElement = document.getElementById('logoPlaceholder');
+                logoElement.classList.add('loading');
+            } else {
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+            }
             button.disabled = true;
         } else {
             const icons = {
                 'name': 'fas fa-redo',
-                'tagline': 'fas fa-redo',
+                'tagline': 'fas fa-redo', 
                 'colors': 'fas fa-redo',
                 'logo': 'fas fa-redo'
             };
-            button.innerHTML = `<i class="${icons[type]}"></i> Regenerate`;
+            const labels = {
+                'name': 'Regenerate',
+                'tagline': 'Regenerate',
+                'colors': 'New Palette', 
+                'logo': 'New Style'
+            };
+            button.innerHTML = `<i class="${icons[type]}"></i> ${labels[type]}`;
             button.disabled = false;
+            
+            // Remove loading shimmer from logo placeholder
+            if (type === 'logo') {
+                const logoElement = document.getElementById('logoPlaceholder');
+                logoElement.classList.remove('loading');
+            }
         }
     }
 
