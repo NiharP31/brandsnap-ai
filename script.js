@@ -573,12 +573,264 @@ Avoid text/typography, focus on symbolic elements and shapes.`;
     }
 }
 
+// AI-Powered Brand generation with OpenAI integration
+class BrandAgent {
+    constructor(brandGenerator) {
+        this.brandGenerator = brandGenerator;
+        this.conversationHistory = [];
+        this.currentContext = null;
+        this.isActive = false;
+    }
+
+    // Initialize conversation with the user
+    async startConsultation(initialIdea = null) {
+        this.isActive = true;
+        this.conversationHistory = [];
+        
+        const welcomeMessage = initialIdea 
+            ? `Hi! I'm your AI Brand Consultant. I see you're interested in "${initialIdea}". I'd love to help you create the perfect brand identity! Let me ask you a few questions to understand your vision better.
+
+What's the main problem your startup solves, and who is your target audience?`
+            : `Hi! I'm your AI Brand Consultant. I'm here to help you create an amazing brand identity for your startup. 
+
+Could you tell me about your business idea? What problem does it solve and who are your customers?`;
+
+        this.conversationHistory.push({
+            role: 'assistant',
+            content: welcomeMessage,
+            timestamp: Date.now()
+        });
+
+        return welcomeMessage;
+    }
+
+    // Process user input and provide intelligent responses
+    async chat(userMessage) {
+        if (!this.brandGenerator.openaiApiKey) {
+            throw new Error('OpenAI API key required for AI Agent');
+        }
+
+        // Add user message to history
+        this.conversationHistory.push({
+            role: 'user',
+            content: userMessage,
+            timestamp: Date.now()
+        });
+
+        // Generate AI response based on conversation context
+        const response = await this.generateAgentResponse(userMessage);
+        
+        // Add assistant response to history
+        this.conversationHistory.push({
+            role: 'assistant',
+            content: response.message,
+            timestamp: Date.now(),
+            action: response.action || null,
+            brandData: response.brandData || null
+        });
+
+        return response;
+    }
+
+    // Generate intelligent agent response using OpenAI
+    async generateAgentResponse(userMessage) {
+        const systemPrompt = `You are an expert AI Brand Consultant for BrandSnap.ai. Your role is to:
+
+1. Guide users through creating their brand identity through conversation
+2. Ask strategic questions about their business, target audience, and vision
+3. Provide actionable branding advice and insights
+4. Determine when you have enough information to generate a brand
+5. Offer specific suggestions for brand names, taglines, and visual direction
+
+Current conversation context: ${this.conversationHistory.length} messages
+User's latest message: "${userMessage}"
+
+Respond with a JSON object in this format:
+{
+  "message": "Your conversational response to the user (friendly, professional, helpful)",
+  "action": "next_step|generate_brand|ask_questions|provide_advice|refine_brand",
+  "readyToGenerate": boolean,
+  "brandInsights": {
+    "industry": "detected industry if clear",
+    "targetAudience": "identified target audience if mentioned",
+    "keyValues": ["identified brand values"],
+    "competitivePosition": "market positioning insights if discussed"
+  },
+  "suggestedQuestions": ["follow-up questions if needed"]
+}
+
+Guidelines:
+- Be conversational and engaging, not robotic
+- Ask 1-2 strategic questions maximum per response
+- Build on previous conversation context
+- Provide specific, actionable advice
+- Signal when ready to generate brand based on gathered information
+- Offer alternatives and explain reasoning`;
+
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            ...this.conversationHistory.slice(-6), // Last 6 messages for context
+            { role: 'user', content: userMessage }
+        ];
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${this.brandGenerator.openaiApiKey}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-3.5-turbo',
+                messages: messages,
+                max_tokens: 600,
+                temperature: 0.7
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to generate agent response');
+        }
+
+        const data = await response.json();
+        const content = data.choices[0].message.content;
+        
+        try {
+            return JSON.parse(content);
+        } catch (error) {
+            // Fallback if JSON parsing fails
+            return {
+                message: content,
+                action: 'ask_questions',
+                readyToGenerate: false
+            };
+        }
+    }
+
+    // Generate brand based on conversation insights
+    async generateBrandFromConversation() {
+        // Extract key insights from conversation
+        const insights = this.extractConversationInsights();
+        
+        // Create enhanced prompt based on conversation
+        const enhancedIdea = this.buildEnhancedPrompt(insights);
+        
+        // Generate brand using existing method with enhanced context
+        return await this.brandGenerator.generateBrandWithAI(enhancedIdea);
+    }
+
+    // Extract insights from conversation history
+    extractConversationInsights() {
+        const userMessages = this.conversationHistory
+            .filter(msg => msg.role === 'user')
+            .map(msg => msg.content)
+            .join(' ');
+
+        return {
+            businessDescription: userMessages,
+            keyTopics: this.extractKeyTopics(userMessages),
+            conversationLength: this.conversationHistory.length
+        };
+    }
+
+    // Build enhanced prompt from conversation
+    buildEnhancedPrompt(insights) {
+        return `Based on detailed conversation: ${insights.businessDescription}
+        
+Key insights gathered: ${insights.keyTopics.join(', ')}
+Context: This brand was developed through ${insights.conversationLength} conversational exchanges with the user.`;
+    }
+
+    // Extract key topics and themes from conversation
+    extractKeyTopics(text) {
+        const keywords = text.toLowerCase().match(/\b\w{4,}\b/g) || [];
+        const frequency = {};
+        
+        keywords.forEach(word => {
+            frequency[word] = (frequency[word] || 0) + 1;
+        });
+
+        return Object.entries(frequency)
+            .filter(([word, count]) => count > 1)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([word]) => word);
+    }
+
+    // Provide brand refinement suggestions
+    async provideBrandFeedback(currentBrand, userFeedback) {
+        if (!this.brandGenerator.openaiApiKey) {
+            throw new Error('OpenAI API key required for brand feedback');
+        }
+
+        const prompt = `As an AI Brand Consultant, provide specific feedback and improvement suggestions for this brand:
+
+Current Brand:
+- Name: ${currentBrand.brandName}
+- Tagline: ${currentBrand.tagline}
+- Industry: ${currentBrand.industry}
+
+User Feedback: "${userFeedback}"
+
+Provide a JSON response with:
+{
+  "feedback": "specific analysis of the current brand",
+  "suggestions": ["3-4 specific improvement suggestions"],
+  "alternatives": {
+    "names": ["2-3 alternative brand names"],
+    "taglines": ["2-3 alternative taglines"]
+  },
+  "reasoning": "explanation of suggested changes"
+}`;
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${this.brandGenerator.openaiApiKey}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-3.5-turbo',
+                messages: [{ role: 'user', content: prompt }],
+                max_tokens: 500,
+                temperature: 0.8
+            })
+        });
+
+        const data = await response.json();
+        return JSON.parse(data.choices[0].message.content);
+    }
+
+    // Reset conversation
+    reset() {
+        this.conversationHistory = [];
+        this.currentContext = null;
+        this.isActive = false;
+    }
+
+    // Get conversation summary
+    getConversationSummary() {
+        return {
+            messageCount: this.conversationHistory.length,
+            duration: this.conversationHistory.length > 0 
+                ? Date.now() - this.conversationHistory[0].timestamp 
+                : 0,
+            insights: this.extractConversationInsights()
+        };
+    }
+}
+
 // Main application
 class BrandSnapApp {
     constructor() {
-        this.generator = new BrandGenerator();
+        this.brandGenerator = new BrandGenerator();
+        this.brandAgent = new BrandAgent(this.brandGenerator);
+        this.voiceAgent = new VoiceAgent(this.brandAgent);
+        this.agentMode = false; // Toggle between quick generation and agent consultation
+        this.voiceMode = false; // Voice consultation mode
         this.initializeEventListeners();
         this.initializeAPIKeyManagement();
+        this.initializeAgentInterface();
+        this.initializeVoiceInterface();
     }
 
     initializeEventListeners() {
@@ -621,7 +873,7 @@ class BrandSnapApp {
     }
 
     createSettingsButton() {
-        const nav = document.querySelector('.nav');
+        const settingsContainer = document.querySelector('.settings-container');
         const settingsBtn = document.createElement('button');
         settingsBtn.innerHTML = '<i class="fas fa-cog"></i>';
         settingsBtn.className = 'settings-btn';
@@ -651,7 +903,7 @@ class BrandSnapApp {
             settingsBtn.style.transform = 'translateY(0)';
         });
         
-        nav.appendChild(settingsBtn);
+        settingsContainer.appendChild(settingsBtn);
     }
 
     createSettingsModal() {
@@ -752,7 +1004,7 @@ class BrandSnapApp {
         const apiKeyInput = document.getElementById('apiKeyInput');
         
         // Load current API key
-        const currentKey = this.generator.getStoredApiKey();
+        const currentKey = this.brandGenerator.getStoredApiKey();
         if (currentKey) {
             apiKeyInput.value = currentKey;
         }
@@ -792,15 +1044,17 @@ class BrandSnapApp {
             return;
         }
         
-        this.generator.setApiKey(apiKey);
+        this.brandGenerator.setApiKey(apiKey);
         this.updateAPIKeyStatus();
-        this.showSuccess('API key saved! AI generation is now enabled.');
+        this.updateVoiceAvailability();
+        this.showSuccess('API key saved! AI generation and voice features are now enabled.');
     }
 
     removeApiKey() {
-        this.generator.setApiKey(null);
+        this.brandGenerator.setApiKey(null);
         document.getElementById('apiKeyInput').value = '';
         this.updateAPIKeyStatus();
+        this.updateVoiceAvailability();
         this.showSuccess('API key removed. Using algorithmic generation.');
     }
 
@@ -856,7 +1110,7 @@ class BrandSnapApp {
         
         if (!statusDot || !statusText) return;
         
-        if (this.generator.useAI) {
+        if (this.brandGenerator.useAI) {
             statusDot.style.background = '#27ae60';
             statusText.textContent = 'AI Status: Enabled (OpenAI GPT)';
             generateBtn.innerHTML = '<i class="fas fa-robot"></i> Generate Brand with AI';
@@ -879,14 +1133,14 @@ class BrandSnapApp {
 
         // Show different loading messages based on AI status
         const loadingText = document.querySelector('.loading-content p');
-        if (this.generator.useAI) {
+        if (this.brandGenerator.useAI) {
             loadingText.textContent = 'AI is analyzing your idea and creating your brand...';
         } else {
             loadingText.textContent = 'Generating your brand identity...';
         }
 
         try {
-            const brand = await this.generator.generateBrand(idea);
+            const brand = await this.brandGenerator.generateBrand(idea);
             this.displayResults(brand);
             this.showLoading(false);
             this.scrollToResults();
@@ -900,7 +1154,7 @@ class BrandSnapApp {
     async regenerateComponent(type) {
         const idea = document.getElementById('startupIdea').value.trim();
         
-        if (!idea || !this.generator.currentBrand) {
+        if (!idea || !this.brandGenerator.currentBrand) {
             this.showError('Please generate a brand first!');
             return;
         }
@@ -909,7 +1163,7 @@ class BrandSnapApp {
         this.showComponentLoading(type, true);
 
         try {
-            const brand = await this.generator.regenerateComponent(type, idea);
+            const brand = await this.brandGenerator.regenerateComponent(type, idea);
             this.updateComponent(type, brand);
             this.showComponentLoading(type, false);
         } catch (error) {
@@ -1032,7 +1286,7 @@ class BrandSnapApp {
     showComponentLoading(type, show) {
         const button = document.querySelector(`[data-type="${type}"]`);
         if (show) {
-            if (type === 'logo' && this.generator.useAI) {
+            if (type === 'logo' && this.brandGenerator.useAI) {
                 button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating AI Logo...';
                 // Add loading shimmer to logo placeholder
                 const logoElement = document.getElementById('logoPlaceholder');
@@ -1120,12 +1374,12 @@ class BrandSnapApp {
     }
 
     downloadResults() {
-        if (!this.generator.currentBrand) {
+        if (!this.brandGenerator.currentBrand) {
             this.showError('No brand data to download!');
             return;
         }
 
-        const brand = this.generator.currentBrand;
+        const brand = this.brandGenerator.currentBrand;
         
         // Create downloadable data
         const data = {
@@ -1201,11 +1455,649 @@ Generated with ❤️ by BrandSnap.ai
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
+
+    initializeAgentInterface() {
+        // Create agent toggle button
+        this.createAgentToggle();
+        // Create agent chat interface
+        this.createAgentChatInterface();
+        // Initialize agent event listeners
+        this.initializeAgentEventListeners();
+    }
+
+    createAgentToggle() {
+        const settingsContainer = document.querySelector('.settings-container');
+        const agentToggle = document.createElement('div');
+        agentToggle.className = 'agent-toggle';
+        agentToggle.innerHTML = `
+            <button id="agent-mode-btn" class="agent-mode-btn" title="Switch to AI Consultant Mode">
+                <i class="fas fa-robot"></i>
+                <span>AI Consultant</span>
+            </button>
+        `;
+        settingsContainer.appendChild(agentToggle);
+    }
+
+    createAgentChatInterface() {
+        const container = document.querySelector('.container');
+        const agentInterface = document.createElement('div');
+        agentInterface.id = 'agent-interface';
+        agentInterface.className = 'agent-interface hidden';
+        agentInterface.innerHTML = `
+            <div class="agent-header">
+                <div class="agent-avatar">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="agent-info">
+                    <h3>AI Brand Consultant</h3>
+                    <p>Chat or speak to create your perfect brand</p>
+                </div>
+                <div class="voice-controls">
+                    <button class="voice-control voice-settings-btn" id="voice-settings-btn" title="Voice Settings">
+                        <i class="fas fa-microphone-alt"></i>
+                    </button>
+                </div>
+                <button class="close-agent-btn" id="close-agent-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="agent-chat" id="agent-chat">
+                <div class="chat-messages" id="chat-messages"></div>
+                <div class="chat-input-container">
+                    <div class="chat-input-wrapper">
+                        <input type="text" id="agent-input" placeholder="Type or hold mic to speak..." maxlength="500">
+                        <button id="voice-record-btn" class="voice-control voice-record-btn" title="Hold to record voice">
+                            <i class="fas fa-microphone"></i>
+                        </button>
+                        <button id="send-message-btn" class="send-btn">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <div class="voice-status" id="voice-status">
+                        <div class="voice-indicator">
+                            <span class="voice-dot"></span>
+                            <span class="voice-text">Voice ready</span>
+                        </div>
+                        <div class="audio-controls">
+                            <button id="stop-audio-btn" class="audio-control-btn hidden" title="Stop audio">
+                                <i class="fas fa-stop"></i>
+                            </button>
+                            <button id="toggle-autoplay-btn" class="audio-control-btn voice-control" title="Toggle auto-play responses">
+                                <i class="fas fa-volume-up"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="chat-actions">
+                        <button id="generate-from-chat-btn" class="generate-chat-btn hidden">
+                            <i class="fas fa-magic"></i> Generate Brand
+                        </button>
+                        <button id="voice-generate-btn" class="voice-generate-btn hidden voice-control">
+                            <i class="fas fa-microphone"></i> Say "Generate my brand"
+                        </button>
+                        <button id="reset-chat-btn" class="reset-chat-btn">
+                            <i class="fas fa-refresh"></i> New Consultation
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Voice Settings Modal -->
+            <div id="voice-settings-modal" class="voice-settings-modal hidden">
+                <div class="modal-overlay"></div>
+                <div class="voice-modal-content">
+                    <div class="voice-modal-header">
+                        <h3><i class="fas fa-microphone-alt"></i> Voice Settings</h3>
+                        <button class="modal-close">&times;</button>
+                    </div>
+                    <div class="voice-modal-body">
+                        <div class="voice-section">
+                            <label>AI Voice:</label>
+                            <select id="voice-selector" class="voice-selector">
+                                <option value="alloy">Alloy (Neutral)</option>
+                                <option value="echo">Echo (Male)</option>
+                                <option value="fable">Fable (British)</option>
+                                <option value="onyx">Onyx (Deep)</option>
+                                <option value="nova">Nova (Female)</option>
+                                <option value="shimmer">Shimmer (Bright)</option>
+                            </select>
+                        </div>
+                        <div class="voice-section">
+                            <label>
+                                <input type="checkbox" id="autoplay-toggle" checked>
+                                Auto-play AI responses
+                            </label>
+                        </div>
+                        <div class="voice-section">
+                            <button id="test-voice-btn" class="test-voice-btn voice-control">
+                                <i class="fas fa-play"></i> Test Voice
+                            </button>
+                            <button id="init-voice-btn" class="init-voice-btn voice-control">
+                                <i class="fas fa-microphone"></i> Enable Microphone
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Insert before the main generator section
+        const generatorSection = document.querySelector('.generator-section');
+        container.insertBefore(agentInterface, generatorSection);
+    }
+
+    initializeAgentEventListeners() {
+        // Agent mode toggle
+        document.getElementById('agent-mode-btn').addEventListener('click', () => {
+            this.toggleAgentMode();
+        });
+
+        // Close agent interface
+        document.getElementById('close-agent-btn').addEventListener('click', () => {
+            this.toggleAgentMode(false);
+        });
+
+        // Send message
+        document.getElementById('send-message-btn').addEventListener('click', () => {
+            this.sendAgentMessage();
+        });
+
+        // Enter key to send message
+        document.getElementById('agent-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.sendAgentMessage();
+            }
+        });
+
+        // Generate brand from conversation
+        document.getElementById('generate-from-chat-btn').addEventListener('click', () => {
+            this.generateBrandFromAgent();
+        });
+
+        // Reset conversation
+        document.getElementById('reset-chat-btn').addEventListener('click', () => {
+            this.resetAgentConversation();
+        });
+
+        // Voice Controls
+        this.initializeVoiceEventListeners();
+    }
+
+    initializeVoiceEventListeners() {
+        // Voice settings button
+        document.getElementById('voice-settings-btn').addEventListener('click', () => {
+            this.showVoiceSettings();
+        });
+
+        // Voice record button (hold to record)
+        const recordBtn = document.getElementById('voice-record-btn');
+        let recordTimeout;
+
+        recordBtn.addEventListener('mousedown', async () => {
+            if (!this.brandGenerator.openaiApiKey) {
+                this.showError('OpenAI API key required for voice features');
+                return;
+            }
+            await this.startVoiceRecording();
+        });
+
+        recordBtn.addEventListener('mouseup', () => {
+            this.stopVoiceRecording();
+        });
+
+        recordBtn.addEventListener('mouseleave', () => {
+            this.stopVoiceRecording();
+        });
+
+        // Touch events for mobile
+        recordBtn.addEventListener('touchstart', async (e) => {
+            e.preventDefault();
+            if (!this.brandGenerator.openaiApiKey) {
+                this.showError('OpenAI API key required for voice features');
+                return;
+            }
+            await this.startVoiceRecording();
+        });
+
+        recordBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.stopVoiceRecording();
+        });
+
+        // Voice settings modal
+        document.getElementById('voice-settings-modal').querySelector('.modal-close').addEventListener('click', () => {
+            this.hideVoiceSettings();
+        });
+
+        document.getElementById('voice-settings-modal').querySelector('.modal-overlay').addEventListener('click', () => {
+            this.hideVoiceSettings();
+        });
+
+        // Voice selector
+        document.getElementById('voice-selector').addEventListener('change', (e) => {
+            this.voiceAgent.setVoice(e.target.value);
+        });
+
+        // Auto-play toggle
+        document.getElementById('autoplay-toggle').addEventListener('change', (e) => {
+            this.voiceAgent.toggleAutoPlay();
+        });
+
+        // Stop audio button
+        document.getElementById('stop-audio-btn').addEventListener('click', () => {
+            this.voiceAgent.stopAudio();
+            this.updateVoiceStatus();
+        });
+
+        // Toggle auto-play button
+        document.getElementById('toggle-autoplay-btn').addEventListener('click', () => {
+            const autoPlay = this.voiceAgent.toggleAutoPlay();
+            const btn = document.getElementById('toggle-autoplay-btn');
+            btn.innerHTML = autoPlay ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-mute"></i>';
+            btn.title = autoPlay ? 'Auto-play enabled' : 'Auto-play disabled';
+        });
+
+        // Test voice button
+        document.getElementById('test-voice-btn').addEventListener('click', async () => {
+            await this.testVoice();
+        });
+
+        // Initialize voice button
+        document.getElementById('init-voice-btn').addEventListener('click', async () => {
+            await this.initializeVoice();
+        });
+
+        // Voice generate button (for voice-specific generation)
+        document.getElementById('voice-generate-btn').addEventListener('click', async () => {
+            const testMessage = "Generate my brand based on our conversation";
+            await this.processVoiceCommand(testMessage);
+        });
+    }
+
+    async startVoiceRecording() {
+        try {
+            // Initialize voice if not already done
+            if (!this.voiceAgent.voiceEnabled) {
+                const initialized = await this.voiceAgent.initializeVoice();
+                if (!initialized) {
+                    this.showError('Could not initialize voice recording');
+                    return;
+                }
+            }
+
+            const started = await this.voiceAgent.startRecording();
+            if (started) {
+                this.updateVoiceStatus('recording');
+                this.showVoiceRecordingIndicator(true);
+            }
+        } catch (error) {
+            console.error('Voice recording error:', error);
+            this.showError('Voice recording failed: ' + error.message);
+        }
+    }
+
+    async stopVoiceRecording() {
+        try {
+            const stopped = this.voiceAgent.stopRecording();
+            if (stopped) {
+                this.updateVoiceStatus('processing');
+                this.showVoiceRecordingIndicator(false);
+                
+                // Processing will be handled by the VoiceAgent's processVoiceInput
+                // which will call our voice response handler
+            }
+        } catch (error) {
+            console.error('Voice stop error:', error);
+            this.updateVoiceStatus('ready');
+        }
+    }
+
+    async processVoiceCommand(transcription) {
+        // Check for generation command
+        const generationKeywords = ['generate', 'create', 'make', 'build', 'design'];
+        const brandKeywords = ['brand', 'logo', 'identity', 'company', 'business'];
+        
+        const hasGenerationKeyword = generationKeywords.some(keyword => 
+            transcription.toLowerCase().includes(keyword)
+        );
+        const hasBrandKeyword = brandKeywords.some(keyword => 
+            transcription.toLowerCase().includes(keyword)
+        );
+
+        if (hasGenerationKeyword && hasBrandKeyword) {
+            // User wants to generate the brand
+            await this.generateBrandFromAgent(true); // true = voice-initiated
+            return;
+        }
+
+        // Regular conversation
+        return await this.brandAgent.chat(transcription);
+    }
+
+    showVoiceRecordingIndicator(show) {
+        const recordBtn = document.getElementById('voice-record-btn');
+        const voiceStatus = document.getElementById('voice-status');
+        
+        if (show) {
+            recordBtn.classList.add('recording');
+            voiceStatus.classList.add('recording');
+        } else {
+            recordBtn.classList.remove('recording');
+            voiceStatus.classList.remove('recording');
+        }
+    }
+
+    updateVoiceStatus(status = 'ready') {
+        const voiceDot = document.querySelector('.voice-dot');
+        const voiceText = document.querySelector('.voice-text');
+        const stopBtn = document.getElementById('stop-audio-btn');
+        
+        switch (status) {
+            case 'recording':
+                voiceDot.className = 'voice-dot recording';
+                voiceText.textContent = 'Listening...';
+                break;
+            case 'processing':
+                voiceDot.className = 'voice-dot processing';
+                voiceText.textContent = 'Processing speech...';
+                break;
+            case 'playing':
+                voiceDot.className = 'voice-dot playing';
+                voiceText.textContent = 'AI speaking...';
+                stopBtn.classList.remove('hidden');
+                break;
+            case 'ready':
+            default:
+                voiceDot.className = 'voice-dot ready';
+                voiceText.textContent = 'Voice ready';
+                stopBtn.classList.add('hidden');
+                break;
+        }
+    }
+
+    showVoiceSettings() {
+        document.getElementById('voice-settings-modal').classList.remove('hidden');
+    }
+
+    hideVoiceSettings() {
+        document.getElementById('voice-settings-modal').classList.add('hidden');
+    }
+
+    async testVoice() {
+        const testMessage = "Hello! I'm your AI Brand Consultant. I'm ready to help you create an amazing brand identity through conversation.";
+        await this.voiceAgent.speakText(testMessage);
+    }
+
+    async initializeVoice() {
+        const initialized = await this.voiceAgent.initializeVoice();
+        if (initialized) {
+            this.showSuccess('Voice recording enabled! You can now use voice commands.');
+            this.updateVoiceAvailability();
+        } else {
+            this.showError('Could not enable voice recording. Please check microphone permissions.');
+        }
+    }
+
+    async generateBrandFromAgent(voiceInitiated = false) {
+        if (!this.brandAgent.isActive) {
+            this.showError('No active conversation to generate from');
+            return;
+        }
+
+        // Show loading state
+        this.showLoading(true);
+        
+        // Update voice status if voice-initiated
+        if (voiceInitiated) {
+            this.updateVoiceStatus('processing');
+        }
+
+        try {
+            // Generate the brand from conversation
+            const brand = await this.brandAgent.generateBrandFromConversation();
+            
+            // Update the current brand in generator
+            this.brandGenerator.currentBrand = brand;
+            
+            // Display the visual results
+            this.displayResults(brand);
+            this.scrollToResults();
+            
+            // Prepare response message
+            const successMessage = voiceInitiated 
+                ? `Perfect! I've created your brand identity based on our conversation. Your brand name is ${brand.brandName} with the tagline "${brand.tagline}". Check out the complete brand package below with your logo, colors, and all the details!`
+                : `Perfect! I've generated your brand identity based on our conversation. Check it out below! 🎉`;
+            
+            // Add success message to chat
+            this.addChatMessage('assistant', successMessage);
+            
+            // Speak the success message if voice-initiated
+            if (voiceInitiated && this.voiceAgent.autoPlayResponses) {
+                await this.voiceAgent.speakText(successMessage);
+            }
+            
+            // Hide generate buttons and show completion state
+            document.getElementById('generate-from-chat-btn').classList.add('hidden');
+            document.getElementById('voice-generate-btn').classList.add('hidden');
+            
+            // Add a celebration message
+            setTimeout(() => {
+                this.addChatMessage('assistant', 'Your brand is ready! You can download the complete brand package or ask me any questions about your new brand identity. 🎨✨');
+            }, 2000);
+            
+        } catch (error) {
+            console.error('Failed to generate brand from agent:', error);
+            this.showError('Failed to generate brand. Please try again.');
+            
+            if (voiceInitiated) {
+                await this.voiceAgent.speakText("I'm sorry, I had trouble generating your brand. Please try again or check your connection.");
+            }
+        } finally {
+            this.showLoading(false);
+            this.updateVoiceStatus('ready');
+        }
+    }
+
+    async toggleAgentMode(force = null) {
+        this.agentMode = force !== null ? force : !this.agentMode;
+        
+        const agentInterface = document.getElementById('agent-interface');
+        const generatorSection = document.querySelector('.generator-section');
+        const agentBtn = document.getElementById('agent-mode-btn');
+
+        if (this.agentMode) {
+            // Switch to agent mode
+            agentInterface.classList.remove('hidden');
+            generatorSection.classList.add('hidden');
+            agentBtn.classList.add('active');
+            
+            // Initialize voice interface
+            this.updateVoiceAvailability();
+            
+            // Start consultation if not already started
+            if (!this.brandAgent.isActive) {
+                await this.startAgentConsultation();
+            }
+        } else {
+            // Switch to quick generation mode
+            agentInterface.classList.add('hidden');
+            generatorSection.classList.remove('hidden');
+            agentBtn.classList.remove('active');
+            
+            // Stop any ongoing voice activities
+            this.voiceAgent.stopAudio();
+            this.voiceAgent.stopRecording();
+        }
+    }
+
+    async startAgentConsultation() {
+        if (!this.brandGenerator.openaiApiKey) {
+            this.showError('OpenAI API key required for AI Consultant. Please set it in settings.');
+            this.toggleAgentMode(false);
+            return;
+        }
+
+        try {
+            const welcomeMessage = await this.brandAgent.startConsultation();
+            this.addChatMessage('assistant', welcomeMessage);
+            
+            // Auto-speak welcome message if voice is enabled
+            if (this.voiceAgent.voiceEnabled && this.voiceAgent.autoPlayResponses) {
+                await this.voiceAgent.speakText(welcomeMessage);
+            }
+        } catch (error) {
+            console.error('Failed to start agent consultation:', error);
+            this.showError('Failed to start AI consultation. Please try again.');
+        }
+    }
+
+    async sendAgentMessage() {
+        const input = document.getElementById('agent-input');
+        const message = input.value.trim();
+        
+        if (!message) return;
+
+        // Add user message to chat
+        this.addChatMessage('user', message);
+        input.value = '';
+
+        // Show typing indicator
+        this.showAgentTyping(true);
+
+        try {
+            const response = await this.brandAgent.chat(message);
+            
+            // Hide typing indicator
+            this.showAgentTyping(false);
+            
+            // Add agent response
+            this.addChatMessage('assistant', response.message);
+            
+            // Auto-speak response if voice enabled
+            if (this.voiceAgent.autoPlayResponses) {
+                this.updateVoiceStatus('playing');
+                await this.voiceAgent.speakText(response.message);
+                this.updateVoiceStatus('ready');
+            }
+            
+            // Show generate button if ready
+            if (response.readyToGenerate) {
+                document.getElementById('generate-from-chat-btn').classList.remove('hidden');
+                document.getElementById('voice-generate-btn').classList.remove('hidden');
+            }
+            
+        } catch (error) {
+            this.showAgentTyping(false);
+            console.error('Agent chat error:', error);
+            this.addChatMessage('assistant', "I apologize, but I'm having trouble responding right now. Please try again or use the quick generation mode.");
+        }
+    }
+
+    addChatMessage(role, content) {
+        const chatMessages = document.getElementById('chat-messages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message ${role}-message`;
+        
+        const avatar = role === 'assistant' 
+            ? '<div class="message-avatar"><i class="fas fa-robot"></i></div>'
+            : '<div class="message-avatar"><i class="fas fa-user"></i></div>';
+        
+        messageDiv.innerHTML = `
+            ${avatar}
+            <div class="message-content">${content}</div>
+            <div class="message-time">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+        `;
+        
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    showAgentTyping(show) {
+        const chatMessages = document.getElementById('chat-messages');
+        const existingTyping = chatMessages.querySelector('.typing-indicator');
+        
+        if (show && !existingTyping) {
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'chat-message assistant-message typing-indicator';
+            typingDiv.innerHTML = `
+                <div class="message-avatar"><i class="fas fa-robot"></i></div>
+                <div class="message-content">
+                    <div class="typing-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            `;
+            chatMessages.appendChild(typingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        } else if (!show && existingTyping) {
+            existingTyping.remove();
+        }
+    }
+
+    resetAgentConversation() {
+        this.brandAgent.reset();
+        this.voiceAgent.stopAudio();
+        document.getElementById('chat-messages').innerHTML = '';
+        document.getElementById('generate-from-chat-btn').classList.add('hidden');
+        document.getElementById('voice-generate-btn').classList.add('hidden');
+        this.startAgentConsultation();
+    }
+
+    // Update API key methods to include voice availability
+    saveApiKey() {
+        const apiKey = document.getElementById('apiKeyInput').value.trim();
+        
+        if (!apiKey) {
+            this.showError('Please enter an API key');
+            return;
+        }
+        
+        if (!apiKey.startsWith('sk-')) {
+            this.showError('Invalid API key format. Should start with "sk-"');
+            return;
+        }
+        
+        this.brandGenerator.setApiKey(apiKey);
+        this.updateAPIKeyStatus();
+        this.updateVoiceAvailability();
+        this.showSuccess('API key saved! AI generation and voice features are now enabled.');
+    }
+
+    removeApiKey() {
+        this.brandGenerator.setApiKey(null);
+        document.getElementById('apiKeyInput').value = '';
+        this.updateAPIKeyStatus();
+        this.updateVoiceAvailability();
+        this.showSuccess('API key removed. Using algorithmic generation.');
+    }
+
+    async initializeVoiceInterface() {
+        // Initialize voice capabilities when API key is available
+        this.updateVoiceAvailability();
+    }
+
+    updateVoiceAvailability() {
+        const hasApiKey = !!this.brandGenerator.openaiApiKey;
+        const voiceControls = document.querySelectorAll('.voice-control');
+        
+        voiceControls.forEach(control => {
+            if (hasApiKey) {
+                control.classList.remove('disabled');
+                control.title = 'Voice features available';
+            } else {
+                control.classList.add('disabled');
+                control.title = 'Requires OpenAI API key';
+            }
+        });
+    }
 }
 
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new BrandSnapApp();
+    window.brandSnapApp = new BrandSnapApp();
 });
 
 // Add some interactive features
@@ -1241,4 +2133,294 @@ document.addEventListener('DOMContentLoaded', () => {
         
         setTimeout(typeWriter, 500);
     }
-}); 
+});
+
+// Voice Agent for OpenAI Whisper + TTS integration
+class VoiceAgent {
+    constructor(brandAgent) {
+        this.brandAgent = brandAgent;
+        this.isRecording = false;
+        this.isPlaying = false;
+        this.mediaRecorder = null;
+        this.audioChunks = [];
+        this.currentAudio = null;
+        this.voiceEnabled = false;
+        this.autoPlayResponses = true;
+        this.selectedVoice = 'alloy'; // Default OpenAI TTS voice
+        
+        this.voices = [
+            { id: 'alloy', name: 'Alloy (Neutral)', description: 'Balanced and professional' },
+            { id: 'echo', name: 'Echo (Male)', description: 'Clear and friendly male voice' },
+            { id: 'fable', name: 'Fable (British)', description: 'Sophisticated British accent' },
+            { id: 'onyx', name: 'Onyx (Deep)', description: 'Deep and authoritative' },
+            { id: 'nova', name: 'Nova (Female)', description: 'Warm and engaging female voice' },
+            { id: 'shimmer', name: 'Shimmer (Bright)', description: 'Energetic and upbeat' }
+        ];
+    }
+
+    // Initialize voice capabilities
+    async initializeVoice() {
+        try {
+            // Check if browser supports required APIs
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('Voice recording not supported in this browser');
+            }
+
+            // Request microphone permission
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    sampleRate: 44100
+                } 
+            });
+            
+            // Stop the stream immediately (we just needed permission)
+            stream.getTracks().forEach(track => track.stop());
+            
+            this.voiceEnabled = true;
+            console.log('Voice agent initialized successfully');
+            return true;
+        } catch (error) {
+            console.error('Voice initialization failed:', error);
+            this.voiceEnabled = false;
+            return false;
+        }
+    }
+
+    // Start recording user voice
+    async startRecording() {
+        if (!this.voiceEnabled || this.isRecording) return false;
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    sampleRate: 44100
+                } 
+            });
+
+            this.mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'audio/webm;codecs=opus'
+            });
+
+            this.audioChunks = [];
+            
+            this.mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    this.audioChunks.push(event.data);
+                }
+            };
+
+            this.mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                await this.processVoiceInput(audioBlob);
+                
+                // Stop all tracks
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            this.mediaRecorder.start();
+            this.isRecording = true;
+            return true;
+        } catch (error) {
+            console.error('Recording failed:', error);
+            return false;
+        }
+    }
+
+    // Stop recording
+    stopRecording() {
+        if (this.mediaRecorder && this.isRecording) {
+            this.mediaRecorder.stop();
+            this.isRecording = false;
+            return true;
+        }
+        return false;
+    }
+
+    // Process voice input using OpenAI Whisper
+    async processVoiceInput(audioBlob) {
+        if (!this.brandAgent.brandGenerator.openaiApiKey) {
+            throw new Error('OpenAI API key required for voice processing');
+        }
+
+        try {
+            // Convert to proper format for Whisper
+            const formData = new FormData();
+            formData.append('file', audioBlob, 'audio.webm');
+            formData.append('model', 'whisper-1');
+            formData.append('language', 'en');
+
+            const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.brandAgent.brandGenerator.openaiApiKey}`
+                },
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error?.message || 'Speech recognition failed');
+            }
+
+            const data = await response.json();
+            const transcription = data.text.trim();
+            
+            if (transcription) {
+                // Get the app instance to handle the response
+                const app = window.brandSnapApp;
+                
+                // Add user message to chat
+                app.addChatMessage('user', transcription);
+                
+                // Check for generation commands
+                const generationKeywords = ['generate', 'create', 'make', 'build', 'design'];
+                const brandKeywords = ['brand', 'logo', 'identity', 'company', 'business'];
+                
+                const hasGenerationKeyword = generationKeywords.some(keyword => 
+                    transcription.toLowerCase().includes(keyword)
+                );
+                const hasBrandKeyword = brandKeywords.some(keyword => 
+                    transcription.toLowerCase().includes(keyword)
+                );
+
+                if (hasGenerationKeyword && hasBrandKeyword) {
+                    // User wants to generate the brand
+                    await app.generateBrandFromAgent(true); // true = voice-initiated
+                    return;
+                }
+                
+                // Show typing indicator
+                app.showAgentTyping(true);
+                
+                // Send transcription to brand agent and get response
+                const agentResponse = await this.brandAgent.chat(transcription);
+                
+                // Hide typing indicator
+                app.showAgentTyping(false);
+                
+                // Add agent response to chat
+                app.addChatMessage('assistant', agentResponse.message);
+                
+                // Auto-play AI response if enabled
+                if (this.autoPlayResponses && agentResponse.message) {
+                    app.updateVoiceStatus('playing');
+                    await this.speakText(agentResponse.message);
+                    app.updateVoiceStatus('ready');
+                }
+                
+                // Show generate buttons if ready
+                if (agentResponse.readyToGenerate) {
+                    document.getElementById('generate-from-chat-btn').classList.remove('hidden');
+                    document.getElementById('voice-generate-btn').classList.remove('hidden');
+                }
+                
+                return {
+                    transcription,
+                    response: agentResponse
+                };
+            } else {
+                throw new Error('No speech detected');
+            }
+        } catch (error) {
+            console.error('Voice processing error:', error);
+            // Get the app instance to show error
+            const app = window.brandSnapApp;
+            app.updateVoiceStatus('ready');
+            app.showError('Voice processing failed: ' + error.message);
+            throw error;
+        }
+    }
+
+    // Convert text to speech using OpenAI TTS
+    async speakText(text) {
+        if (!this.brandAgent.brandGenerator.openaiApiKey || this.isPlaying) {
+            return false;
+        }
+
+        try {
+            this.isPlaying = true;
+
+            const response = await fetch('https://api.openai.com/v1/audio/speech', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.brandAgent.brandGenerator.openaiApiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: 'tts-1',
+                    input: text,
+                    voice: this.selectedVoice,
+                    response_format: 'mp3',
+                    speed: 1.0
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Text-to-speech failed');
+            }
+
+            const audioBlob = await response.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+            
+            // Stop any currently playing audio
+            this.stopAudio();
+            
+            this.currentAudio = new Audio(audioUrl);
+            this.currentAudio.onended = () => {
+                this.isPlaying = false;
+                URL.revokeObjectURL(audioUrl);
+            };
+            
+            this.currentAudio.onerror = () => {
+                this.isPlaying = false;
+                URL.revokeObjectURL(audioUrl);
+            };
+
+            await this.currentAudio.play();
+            return true;
+        } catch (error) {
+            console.error('Text-to-speech error:', error);
+            this.isPlaying = false;
+            return false;
+        }
+    }
+
+    // Stop current audio playback
+    stopAudio() {
+        if (this.currentAudio) {
+            this.currentAudio.pause();
+            this.currentAudio.currentTime = 0;
+            this.isPlaying = false;
+        }
+    }
+
+    // Set TTS voice
+    setVoice(voiceId) {
+        if (this.voices.find(v => v.id === voiceId)) {
+            this.selectedVoice = voiceId;
+            return true;
+        }
+        return false;
+    }
+
+    // Toggle auto-play responses
+    toggleAutoPlay() {
+        this.autoPlayResponses = !this.autoPlayResponses;
+        return this.autoPlayResponses;
+    }
+
+    // Get voice status
+    getStatus() {
+        return {
+            voiceEnabled: this.voiceEnabled,
+            isRecording: this.isRecording,
+            isPlaying: this.isPlaying,
+            selectedVoice: this.selectedVoice,
+            autoPlayResponses: this.autoPlayResponses
+        };
+    }
+} 
